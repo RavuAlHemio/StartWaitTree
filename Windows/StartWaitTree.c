@@ -167,7 +167,9 @@ int noCrtMain(void)
     HANDLE completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
     if (completionPort == NULL)
     {
-        explode(GetLastError(), L"Could not create completion port");
+        DWORD err = GetLastError();
+        CloseHandle(jobObject);
+        explode(err, L"Could not create completion port");
     }
 
     // marry the two
@@ -176,7 +178,10 @@ int noCrtMain(void)
     assPort.CompletionPort = completionPort;
     if (!SetInformationJobObject(jobObject, JobObjectAssociateCompletionPortInformation, &assPort, sizeof(assPort)))
     {
-        explode(GetLastError(), L"Could not assign job object to completion port");
+        DWORD err = GetLastError();
+        CloseHandle(completionPort);
+        CloseHandle(jobObject);
+        explode(err, L"Could not assign job object to completion port");
     }
 
     // launch the child process in a suspended state
@@ -198,24 +203,37 @@ int noCrtMain(void)
         &processInfo
     ))
     {
-        explode(GetLastError(), L"Could not start process");
+        DWORD err = GetLastError();
+        CloseHandle(completionPort);
+        CloseHandle(jobObject);
+        explode(err, L"Could not start process");
     }
 
     // assign the process to the job object
     if (!AssignProcessToJobObject(jobObject, processInfo.hProcess))
     {
-        explode(GetLastError(), L"Failed to assign process to job object");
+        DWORD err = GetLastError();
+        CloseHandle(processInfo.hThread);
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(completionPort);
+        CloseHandle(jobObject);
+        explode(err, L"Failed to assign process to job object");
     }
 
     // resume the process
     if (ResumeThread(processInfo.hThread) == -1)
     {
-        explode(GetLastError(), L"Failed to awaken the newly started process");
+        DWORD err = GetLastError();
+        CloseHandle(processInfo.hThread);
+        CloseHandle(processInfo.hProcess);
+        CloseHandle(completionPort);
+        CloseHandle(jobObject);
+        explode(err, L"Failed to awaken the newly started process");
     }
 
-    // I don't care about these handles anymore
-    CloseHandle(processInfo.hProcess);
+    // I don't care about these two handles anymore
     CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
 
     // wait for process tree to end it all
     for (;;)
@@ -225,7 +243,10 @@ int noCrtMain(void)
         OVERLAPPED *overlapped;
         if (!GetQueuedCompletionStatus(completionPort, &completionCode, &completionKey, &overlapped, INFINITE))
         {
-            explode(GetLastError(), L"Failed to get queued completion status");
+            DWORD err = GetLastError();
+            CloseHandle(completionPort);
+            CloseHandle(jobObject);
+            explode(err, L"Failed to get queued completion status");
         }
         if ((HANDLE)completionKey == jobObject)
         {
