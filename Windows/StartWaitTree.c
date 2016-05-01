@@ -1,5 +1,13 @@
 /**
  * @file StartWaitTree.c
+ *
+ * Starts a process and waits until it and all its descendants have terminated.
+ *
+ * The mechanism used is a Windows NT job object. Waiting for processes to terminate is done using a completion port.
+ *
+ * To escape the vastly annoying dependency on the compiler-specific version of the C runtime library (which requires
+ * the corresponding redistributable to be installed), care has been taken to depend only on the operating system
+ * libraries; currently, this program only depends on functions from kernel32.dll.
  */
 
 #include <stdbool.h>
