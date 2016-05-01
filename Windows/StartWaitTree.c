@@ -71,6 +71,9 @@ const wchar_t *skipCommandLineToken(const wchar_t *token)
     return walker;
 }
 
+/**
+ * @brief Calculates the length of the wide character string by searching for the NUL character.
+ */
 size_t wideStringLength(const wchar_t *str)
 {
     size_t count = 0;
@@ -82,16 +85,83 @@ size_t wideStringLength(const wchar_t *str)
     return count;
 }
 
-bool consoleWrite(HANDLE output, const wchar_t *str)
+/**
+ * @brief Writes a string to the given console or file handle.
+ */
+bool writeToConsoleOrFile(HANDLE output, const wchar_t *str)
 {
-    DWORD charsWritten;
-    return (WriteConsole(output, str, (DWORD)wideStringLength(str), &charsWritten, NULL) != 0);
+    DWORD neverMind;
+    if (GetConsoleMode(output, &neverMind) == 0)
+    {
+        // console redirected to a file
+        return (WriteFile(output, str, (DWORD)wideStringLength(str) * sizeof(str[0]), &neverMind, NULL) != 0);
+    }
+    else
+    {
+        // regular console
+        return (WriteConsoleW(output, str, (DWORD)wideStringLength(str), &neverMind, NULL) != 0);
+    }
 }
 
+bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t *newTail)
+{
+    if (wideStringLength(appendToMe) + wideStringLength(newTail) + 1 > appendToMeMaxSize)
+    {
+        return false;
+    }
+    wchar_t *insertionPoint = appendToMe + wideStringLength(appendToMe);
+    while (newTail[0] != L'\0')
+    {
+        insertionPoint[0] = newTail[0];
+        ++insertionPoint;
+        ++newTail;
+    }
+
+    // NUL-terminate!
+    insertionPoint[0] = L'\0';
+
+    return true;
+}
+
+bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appendAsHex)
+{
+    if (wideStringLength(appendToMe) + 9 > appendToMeMaxSize)
+    {
+        return false;
+    }
+
+    wchar_t *insertionPoint = appendToMe + wideStringLength(appendToMe);
+    for (size_t i = 0; i < 8; ++i)
+    {
+        wchar_t nibble = (wchar_t)((appendAsHex >> (7 - i)) & 0xF);
+        if (nibble < 10)
+        {
+            insertionPoint[i] = (nibble + L'0');
+        }
+        else
+        {
+            insertionPoint[i] = (nibble - 10 + L'a');
+        }
+    }
+    insertionPoint[8] = L'\0';
+    return true;
+}
+
+/**
+ * @brief Outputs a description of the given error prefixed with the supplied string and terminates the process.
+ */
 _declspec(noreturn)
 void explode(DWORD err, const wchar_t *prefix)
 {
     wchar_t *windowsErrorBuffer = NULL;
+    wchar_t *completeErrorBuffer;
+
+    HANDLE heap = GetProcessHeap();
+    if (heap == NULL)
+    {
+        // somebody stole our heap!
+        ExitProcess(err);
+    }
 
     HANDLE stdErr = GetStdHandle(STD_ERROR_HANDLE);
     if (stdErr == NULL)
@@ -114,22 +184,24 @@ void explode(DWORD err, const wchar_t *prefix)
         ExitProcess(err);
     }
 
-    DWORD neverMind;
-    wchar_t *colony = L": ";
-    if (GetConsoleMode(stdErr, &neverMind) == 0)
+    size_t completeErrorBufferCharacters = wideStringLength(prefix) + wideStringLength(L": [0x0123abcd] ") + wideStringLength(windowsErrorBuffer) + 1;
+    completeErrorBuffer = HeapAlloc(heap, 0, completeErrorBufferCharacters * sizeof(wchar_t));
+    if (completeErrorBuffer == NULL)
     {
-        // console redirected to a file
-        WriteFile(stdErr, prefix, (DWORD)wideStringLength(prefix)*sizeof(prefix[0]), &neverMind, NULL);
-        WriteFile(stdErr, colony, (DWORD)wideStringLength(colony) * sizeof(colony[0]), &neverMind, NULL);
-        WriteFile(stdErr, windowsErrorBuffer, (DWORD)wideStringLength(windowsErrorBuffer) * sizeof(windowsErrorBuffer[0]), &neverMind, NULL);
-    }
-    else
-    {
-        WriteConsole(stdErr, prefix, (DWORD)wideStringLength(prefix), &neverMind, NULL);
-        WriteConsole(stdErr, colony, (DWORD)wideStringLength(colony), &neverMind, NULL);
-        WriteConsole(stdErr, windowsErrorBuffer, (DWORD)wideStringLength(windowsErrorBuffer), &neverMind, NULL);
+        // no allocation...
+        ExitProcess(err);
     }
 
+    completeErrorBuffer[0] = L'\0';
+    appendToString(completeErrorBuffer, completeErrorBufferCharacters, prefix);
+    appendToString(completeErrorBuffer, completeErrorBufferCharacters, L": [0x");
+    appendHexToString(completeErrorBuffer, completeErrorBufferCharacters, err);
+    appendToString(completeErrorBuffer, completeErrorBufferCharacters, L"] ");
+    appendToString(completeErrorBuffer, completeErrorBufferCharacters, windowsErrorBuffer);
+
+    writeToConsoleOrFile(stdErr, completeErrorBuffer);
+
+    HeapFree(heap, 0, completeErrorBuffer);
     LocalFree(windowsErrorBuffer);
     ExitProcess(err);
 }
