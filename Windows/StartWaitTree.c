@@ -224,7 +224,24 @@ int noCrtMain(void)
     const wchar_t *fullCommandLine = GetCommandLineW();
     const wchar_t *commandLineNotMe = skipCommandLineToken(fullCommandLine);
 
+    // <nothing>, -?, -h, -H, /?, /h, /H => usage
+    bool showUsage = false;
     if (wideStringLength(commandLineNotMe) == 0)
+    {
+        showUsage = true;
+    }
+    if (commandLineNotMe[0] == L'-' || commandLineNotMe[0] == L'/')
+    {
+        if (commandLineNotMe[1] == L'?' || commandLineNotMe[1] == L'h' || commandLineNotMe[1] == L'H')
+        {
+            if (commandLineNotMe[2] == L'\0')
+            {
+                showUsage = true;
+            }
+        }
+    }
+
+    if (showUsage)
     {
         // output usage
         HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
