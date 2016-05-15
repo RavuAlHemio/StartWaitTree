@@ -11,7 +11,6 @@
  */
 
 #include <stdbool.h>
-#include <strsafe.h>
 #include <wchar.h>
 #include <windows.h>
 
