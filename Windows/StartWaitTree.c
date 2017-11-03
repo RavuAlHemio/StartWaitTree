@@ -132,7 +132,7 @@ bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appe
     wchar_t *insertionPoint = appendToMe + wideStringLength(appendToMe);
     for (size_t i = 0; i < 8; ++i)
     {
-        wchar_t nibble = (wchar_t)((appendAsHex >> (7 - i)) & 0xF);
+        wchar_t nibble = (wchar_t)((appendAsHex >> ((7 - i) * 4)) & 0xF);
         if (nibble < 10)
         {
             insertionPoint[i] = (nibble + L'0');
