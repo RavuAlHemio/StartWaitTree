@@ -10,7 +10,13 @@
  * libraries; currently, this program only depends on functions from kernel32.dll.
  */
 
+#ifdef NOSTDBOOL
+typedef unsigned char bool;
+#define true ((bool)1)
+#define false ((bool)0)
+#else
 #include <stdbool.h>
+#endif
 #include <wchar.h>
 #include <windows.h>
 
