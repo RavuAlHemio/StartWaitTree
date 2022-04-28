@@ -28,6 +28,8 @@ typedef unsigned char bool;
 const wchar_t *skipCommandLineToken(const wchar_t *token)
 {
     const wchar_t *walker = token;
+    bool escaping;
+    bool quoting;
 
     // skip leading whitespace
     while (walker[0] == L' ')
@@ -35,8 +37,8 @@ const wchar_t *skipCommandLineToken(const wchar_t *token)
         ++walker;
     }
 
-    bool escaping = false;
-    bool quoting = false;
+    escaping = false;
+    quoting = false;
     for (;; ++walker)
     {
         if (walker[0] == '\0')
@@ -110,11 +112,12 @@ bool writeToConsoleOrFile(HANDLE output, const wchar_t *str)
 
 bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t *newTail)
 {
+    wchar_t *insertionPoint;
     if (wideStringLength(appendToMe) + wideStringLength(newTail) + 1 > appendToMeMaxSize)
     {
         return false;
     }
-    wchar_t *insertionPoint = appendToMe + wideStringLength(appendToMe);
+    insertionPoint = appendToMe + wideStringLength(appendToMe);
     while (newTail[0] != L'\0')
     {
         insertionPoint[0] = newTail[0];
@@ -130,13 +133,16 @@ bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t
 
 bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appendAsHex)
 {
+    size_t i;
+    wchar_t *insertionPoint;
+
     if (wideStringLength(appendToMe) + 9 > appendToMeMaxSize)
     {
         return false;
     }
 
-    wchar_t *insertionPoint = appendToMe + wideStringLength(appendToMe);
-    for (size_t i = 0; i < 8; ++i)
+    insertionPoint = appendToMe + wideStringLength(appendToMe);
+    for (i = 0; i < 8; ++i)
     {
         wchar_t nibble = (wchar_t)((appendAsHex >> ((7 - i) * 4)) & 0xF);
         if (nibble < 10)
@@ -160,15 +166,18 @@ void explode(DWORD err, const wchar_t *prefix)
 {
     wchar_t *windowsErrorBuffer = NULL;
     wchar_t *completeErrorBuffer;
+    HANDLE heap;
+    HANDLE stdErr;
+    size_t completeErrorBufferCharacters;
 
-    HANDLE heap = GetProcessHeap();
+    heap = GetProcessHeap();
     if (heap == NULL)
     {
         // somebody stole our heap!
         ExitProcess(err);
     }
 
-    HANDLE stdErr = GetStdHandle(STD_ERROR_HANDLE);
+    stdErr = GetStdHandle(STD_ERROR_HANDLE);
     if (stdErr == NULL)
     {
         // oh well, we tried
@@ -189,7 +198,7 @@ void explode(DWORD err, const wchar_t *prefix)
         ExitProcess(err);
     }
 
-    size_t completeErrorBufferCharacters = wideStringLength(prefix) + wideStringLength(L": [0x0123abcd] ") + wideStringLength(windowsErrorBuffer) + 1;
+    completeErrorBufferCharacters = wideStringLength(prefix) + wideStringLength(L": [0x0123abcd] ") + wideStringLength(windowsErrorBuffer) + 1;
     completeErrorBuffer = HeapAlloc(heap, 0, completeErrorBufferCharacters * sizeof(wchar_t));
     if (completeErrorBuffer == NULL)
     {
@@ -214,7 +223,8 @@ void explode(DWORD err, const wchar_t *prefix)
 void zeroMemory(void *ptr, size_t byteCount)
 {
     char *c = (char *)ptr;
-    for (size_t i = 0; i < byteCount; ++i)
+    size_t i;
+    for (i = 0; i < byteCount; ++i)
     {
         c[i] = 0;
     }
@@ -228,6 +238,11 @@ int noCrtMain(void)
     // take the command line (with our own name stripped away)
     const wchar_t *fullCommandLine = GetCommandLineW();
     const wchar_t *commandLineNotMe = skipCommandLineToken(fullCommandLine);
+    HANDLE jobObject;
+    HANDLE completionPort;
+    JOBOBJECT_ASSOCIATE_COMPLETION_PORT assPort;
+    STARTUPINFOW startupInfo;
+    PROCESS_INFORMATION processInfo;
 
     // <nothing>, -?, -h, -H, /?, /h, /H => usage
     bool showUsage = false;
@@ -259,14 +274,14 @@ int noCrtMain(void)
     }
 
     // prepare the job object that will stand guard over the descendants
-    HANDLE jobObject = CreateJobObjectW(NULL, NULL);
+    jobObject = CreateJobObjectW(NULL, NULL);
     if (jobObject == NULL)
     {
         explode(GetLastError(), L"Could not create job object");
     }
 
     // fetch an I/O completion port that will receive the notification that all descendants have terminated
-    HANDLE completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
+    completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
     if (completionPort == NULL)
     {
         DWORD err = GetLastError();
@@ -275,7 +290,6 @@ int noCrtMain(void)
     }
 
     // marry the two
-    JOBOBJECT_ASSOCIATE_COMPLETION_PORT assPort;
     assPort.CompletionKey = jobObject;
     assPort.CompletionPort = completionPort;
     if (!SetInformationJobObject(jobObject, JobObjectAssociateCompletionPortInformation, &assPort, sizeof(assPort)))
@@ -287,11 +301,9 @@ int noCrtMain(void)
     }
 
     // launch the child process in a suspended state
-    STARTUPINFOW startupInfo;
     zeroMemory(&startupInfo, sizeof(startupInfo));
     startupInfo.cb = sizeof(startupInfo);
 
-    PROCESS_INFORMATION processInfo;
     if (!CreateProcessW(
         NULL,
         (wchar_t *)commandLineNotMe,
