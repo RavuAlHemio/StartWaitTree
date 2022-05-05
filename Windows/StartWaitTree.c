@@ -25,7 +25,7 @@ typedef unsigned char bool;
  *        to the location in the string at which the next token starts (or to the terminating NUL character if it is
  *        encountered).
  */
-const wchar_t *skipCommandLineToken(const wchar_t *token)
+static const wchar_t *skipCommandLineToken(const wchar_t *token)
 {
     const wchar_t *walker = token;
     bool escaping;
@@ -81,7 +81,7 @@ const wchar_t *skipCommandLineToken(const wchar_t *token)
 /**
  * @brief Calculates the length of the wide character string by searching for the NUL character.
  */
-size_t wideStringLength(const wchar_t *str)
+static size_t wideStringLength(const wchar_t *str)
 {
     size_t count = 0;
     while (str[0] != L'\0')
@@ -95,7 +95,7 @@ size_t wideStringLength(const wchar_t *str)
 /**
  * @brief Writes a string to the given console or file handle.
  */
-bool writeToConsoleOrFile(HANDLE output, const wchar_t *str)
+static bool writeToConsoleOrFile(HANDLE output, const wchar_t *str)
 {
     DWORD neverMind;
     if (GetConsoleMode(output, &neverMind) == 0)
@@ -110,7 +110,7 @@ bool writeToConsoleOrFile(HANDLE output, const wchar_t *str)
     }
 }
 
-bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t *newTail)
+static bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t *newTail)
 {
     wchar_t *insertionPoint;
     if (wideStringLength(appendToMe) + wideStringLength(newTail) + 1 > appendToMeMaxSize)
@@ -131,7 +131,7 @@ bool appendToString(wchar_t *appendToMe, size_t appendToMeMaxSize, const wchar_t
     return true;
 }
 
-bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appendAsHex)
+static bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appendAsHex)
 {
     size_t i;
     wchar_t *insertionPoint;
@@ -162,7 +162,7 @@ bool appendHexToString(wchar_t *appendToMe, size_t appendToMeMaxSize, DWORD appe
  * @brief Outputs a description of the given error prefixed with the supplied string and terminates the process.
  */
 _declspec(noreturn)
-void explode(DWORD err, const wchar_t *prefix)
+static void explode(DWORD err, const wchar_t *prefix)
 {
     wchar_t *windowsErrorBuffer = NULL;
     wchar_t *completeErrorBuffer;
@@ -220,7 +220,7 @@ void explode(DWORD err, const wchar_t *prefix)
     ExitProcess(err);
 }
 
-void zeroMemory(void *ptr, size_t byteCount)
+static void zeroMemory(void *ptr, size_t byteCount)
 {
     char *c = (char *)ptr;
     size_t i;
