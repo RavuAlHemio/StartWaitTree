@@ -231,6 +231,51 @@ static void zeroMemory(void *ptr, size_t byteCount)
 }
 
 /**
+ * @brief Returns whether the currently running operating system is older than Windows 8.
+ */
+static bool isOlderThanWindows8()
+{
+    OSVERSIONINFOEXW targetVersion;
+    ULONGLONG conditionMask = 0;
+    bool result;
+
+    zeroMemory(&targetVersion, sizeof(targetVersion));
+    targetVersion.dwOSVersionInfoSize = sizeof(targetVersion);
+    targetVersion.dwMajorVersion = 6;
+    targetVersion.dwMinorVersion = 2;
+    targetVersion.wServicePackMajor = 0;
+
+    conditionMask = VerSetConditionMask(
+        VerSetConditionMask(
+            VerSetConditionMask(
+                0,
+                VER_MAJORVERSION,
+                VER_LESS
+            ),
+            VER_MINORVERSION,
+            VER_LESS
+        ),
+        VER_SERVICEPACKMAJOR,
+        VER_LESS
+    );
+
+    result = VerifyVersionInfoW(
+        &targetVersion,
+        VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR,
+        conditionMask
+    );
+    if (!result)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError != ERROR_OLD_WIN_VERSION)
+        {
+            explode(lastError, L"failed to detect whether Windows is older than Windows 8");
+        }
+    }
+    return result;
+}
+
+/**
  * @brief The main entry point of the application, bypassing the C Runtime.
  */
 int noCrtMain(void)
@@ -243,6 +288,7 @@ int noCrtMain(void)
     JOBOBJECT_ASSOCIATE_COMPLETION_PORT assPort;
     STARTUPINFOW startupInfo;
     PROCESS_INFORMATION processInfo;
+    DWORD processCreationFlags;
 
     // <nothing>, -?, -h, -H, /?, /h, /H => usage
     bool showUsage = false;
@@ -304,13 +350,22 @@ int noCrtMain(void)
     zeroMemory(&startupInfo, sizeof(startupInfo));
     startupInfo.cb = sizeof(startupInfo);
 
+    // on Windows versions before Windows 8, a process can only be contained in one job;
+    // spawn our child process broken away from StartWaitTree's job
+    // (doesn't break anything if StartWaitTree is not in a job)
+    processCreationFlags = CREATE_SUSPENDED;
+    if (isOlderThanWindows8())
+    {
+        processCreationFlags |= CREATE_BREAKAWAY_FROM_JOB;
+    }
+
     if (!CreateProcessW(
         NULL,
         (wchar_t *)commandLineNotMe,
         NULL,
         NULL,
         TRUE,
-        CREATE_SUSPENDED,
+        processCreationFlags,
         NULL,
         NULL,
         &startupInfo,

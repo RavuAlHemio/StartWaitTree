@@ -57,7 +57,7 @@ static class BuildI386W2k
     static void CompileC(string outputPath, string sourcePath)
     {
         RunProgramOrThrow("cl.exe", string.Format(
-            "/nologo /c /Fo{0} /DNOSTDBOOL /DWINVER=0x0500 /D_WIN32_WINNT=0x0500 {1}",
+            "/nologo /c /GS- /Fo{0} /DNOSTDBOOL /DWINVER=0x0500 /D_WIN32_WINNT=0x0500 {1}",
             QuoteString(outputPath), QuoteString(sourcePath)));
     }
 
